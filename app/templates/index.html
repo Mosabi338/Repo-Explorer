@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Repo Explorer</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    input { padding: 0.5rem; width: 45%; }
+    select { padding: 0.5rem; }
+    button { padding: 0.5rem 1rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; vertical-align: top; }
+    .error { color: #b00020; margin-top: 1rem; }
+    .summary { white-space: pre-wrap; margin-top: 0.5rem; font-size: 0.9rem; color: #333; }
+  </style>
+</head>
+<body>
+  <h1>Repo Explorer</h1>
+
+  <form method="get" action="/">
+    <input type="text" name="username" placeholder="GitHub username"
+           value="{{ username }}" required>
+
+    <select name="sort">
+      <option value="stars" {% if sort == "stars" %}selected{% endif %}>Most stars</option>
+      <option value="name" {% if sort == "name" %}selected{% endif %}>Name (A-Z)</option>
+    </select>
+
+    <button type="submit">Search</button>
+  </form>
+
+  {% if error %}
+    <p class="error">{{ error }}</p>
+
+  {% elif username and repos %}
+    <h2>{{ repos|length }} repos for {{ username }}</h2>
+    <table data-owner="{{ username }}">
+      <tr>
+        <th>Name</th>
+        <th>Language</th>
+        <th>Stars</th>
+        <th>Summary</th>
+      </tr>
+      {% for repo in repos %}
+        <tr>
+          <td><a href="{{ repo.url }}">{{ repo.name }}</a></td>
+          <td>{{ repo.language }}</td>
+          <td>{{ repo.stars }}</td>
+          <td>
+            <button type="button" class="summarize-btn" data-repo="{{ repo.name }}">Summarize</button>
+            <div class="summary"></div>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+
+  {% elif username %}
+    <p>This user has no public repositories.</p>
+  {% endif %}
+
+  <script>
+    const table = document.querySelector("table");
+
+    if (table) {
+      // One listener on the table handles clicks from every button
+      table.addEventListener("click", async (event) => {
+        const button = event.target.closest(".summarize-btn");
+        if (!button) {
+          return;
+        }
+
+        const owner = table.dataset.owner;
+        const repo = button.dataset.repo;
+        const output = button.parentElement.querySelector(".summary");
+
+        button.disabled = true;
+        output.textContent = "Summarizing...";
+
+        try {
+          const url = `/api/summary/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+          const response = await fetch(url, { method: "POST" });
+          const data = await response.json();
+
+          if (response.ok) {
+            output.textContent = data.summary;
+          } else if (typeof data.detail === "string") {
+            output.textContent = data.detail;
+          } else {
+            output.textContent = "That request was not valid.";
+          }
+        } catch (error) {
+          output.textContent = "Could not reach the server.";
+        } finally {
+          button.disabled = false;
+        }
+      });
+    }
+  </script>
+</body>
+</html>
